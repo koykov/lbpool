@@ -1,4 +1,4 @@
-package ltpool
+package lbpool
 
 import (
 	"crypto/rand"
@@ -25,16 +25,11 @@ func (p *testPoolNative) Put(x *testPoolItem) {
 }
 
 type testPoolItem struct {
-	poolId  int
 	payload []byte
 }
 
-func (i testPoolItem) GetPoolId() int {
-	return i.poolId
-}
-
-func (i *testPoolItem) SetPoolId(id int) {
-	i.poolId = id
+func (i *testPoolItem) Release() {
+	// release logic
 }
 
 func (i *testPoolItem) fill() {
@@ -45,7 +40,7 @@ func (i *testPoolItem) fill() {
 }
 
 func TestPool(t *testing.T) {
-	p := NewPool()
+	p := Pool{}
 
 	for i := 0; i < 100; i++ {
 		var item *testPoolItem
@@ -58,21 +53,15 @@ func TestPool(t *testing.T) {
 		item.fill()
 		p.Put(item)
 	}
-	if len(p.items) != len(p.free)+1 {
-		t.Error("reserved and free items count mismatch")
-	}
-	if p.statGet != p.statPut {
-		t.Error("stat mismatch", p.statGet, "gets vs", p.statPut, "puts")
-	}
 }
 
 func TestPoolParallel(t *testing.T) {
-	p := NewPool()
+	p := Pool{}
 
 	for i := 0; i < 100; i++ {
 		var wg sync.WaitGroup
 
-		for g := 0; g < 1000; g++ {
+		for g := 0; g < 10000; g++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -91,16 +80,10 @@ func TestPoolParallel(t *testing.T) {
 
 		wg.Wait()
 	}
-	if len(p.items) != len(p.free)+1 {
-		t.Error("reserved and free items count mismatch")
-	}
-	if p.statGet != p.statPut {
-		t.Error("stat mismatch", p.statGet, "gets vs", p.statPut, "puts")
-	}
 }
 
 func BenchmarkPool(b *testing.B) {
-	p := NewPool()
+	p := Pool{}
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
@@ -116,6 +99,25 @@ func BenchmarkPool(b *testing.B) {
 	}
 }
 
+func BenchmarkPoolParallel(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		p := Pool{}
+
+		for pb.Next() {
+			var item *testPoolItem
+			x := p.Get()
+			if x == nil {
+				item = &testPoolItem{}
+			} else {
+				item = x.(*testPoolItem)
+			}
+			item.fill()
+			p.Put(item)
+		}
+	})
+}
+
 func BenchmarkPoolNative(b *testing.B) {
 	p := testPoolNative{}
 	b.ReportAllocs()
@@ -128,4 +130,20 @@ func BenchmarkPoolNative(b *testing.B) {
 		item.fill()
 		p.Put(item)
 	}
+}
+
+func BenchmarkPoolNativeParallel(b *testing.B) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		p := testPoolNative{}
+
+		for pb.Next() {
+			item := p.Get()
+			if item == nil {
+				item = &testPoolItem{}
+			}
+			item.fill()
+			p.Put(item)
+		}
+	})
 }
