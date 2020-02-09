@@ -103,7 +103,6 @@ func BenchmarkPoolParallel(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		p := Pool{}
-
 		for pb.Next() {
 			var item *testPoolItem
 			x := p.Get()

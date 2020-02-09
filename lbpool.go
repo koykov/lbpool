@@ -1,5 +1,9 @@
 package lbpool
 
+import (
+	"sync"
+)
+
 const (
 	poolDefSize = 64
 
@@ -12,34 +16,35 @@ type Releaser interface {
 }
 
 type Pool struct {
-	c   chan interface{}
-	l   int
-	s   int
-	New func() interface{}
+	Size  uint
+	ch    chan interface{}
+	state int
+	once  sync.Once
+	New   func() interface{}
 }
 
-func NewPool(limit int) *Pool {
-	p := Pool{l: limit}
+func NewPool(size uint) *Pool {
+	p := Pool{Size: size}
 	p.initPool()
 	return &p
 }
 
 func (p *Pool) initPool() {
-	if p.l == 0 {
-		p.l = poolDefSize
+	if p.Size == 0 {
+		p.Size = poolDefSize
 	}
-	p.c = make(chan interface{}, p.l)
-	p.s = stateInit
+	p.ch = make(chan interface{}, p.Size)
+	p.state = stateInit
 }
 
 func (p *Pool) Get() interface{} {
-	if p.s == stateNil {
-		p.initPool()
+	if p.state == stateNil {
+		p.once.Do(func() { p.initPool() })
 	}
 
 	var x interface{}
 	select {
-	case x = <-p.c:
+	case x = <-p.ch:
 		return x
 	default:
 		if p.New != nil {
@@ -52,7 +57,7 @@ func (p *Pool) Get() interface{} {
 
 func (p *Pool) Put(x Releaser) {
 	select {
-	case p.c <- x:
+	case p.ch <- x:
 		return
 	default:
 		x.Release()
