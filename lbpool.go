@@ -65,11 +65,12 @@ func (p *Pool) Get() interface{} {
 }
 
 // Put adds x to the pool.
-func (p *Pool) Put(x Releaser) {
+func (p *Pool) Put(x Releaser) bool {
 	select {
 	case p.ch <- x:
-		return
+		return true
 	default:
 		x.Release()
 	}
+	return false
 }
