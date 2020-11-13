@@ -44,7 +44,7 @@ func NewPool(size uint) *Pool {
 
 // Prepare pool for work.
 func (p *Pool) initPool() {
-	// Check bounds of range factor first.
+	// Check bounds of release factor first.
 	if p.ReleaseFactor < 0 {
 		p.ReleaseFactor = 0
 	}
