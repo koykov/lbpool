@@ -2,6 +2,7 @@ package lbpool
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -21,22 +22,41 @@ type Releaser interface {
 // A Pool is a set of temporary objects.
 // Object must implement release logic.
 type Pool struct {
-	Size  uint
-	ch    chan interface{}
-	state int
-	once  sync.Once
-	New   func() interface{}
+	Size          uint
+	ReleaseFactor float32
+	rfCounter     uint32
+	ch            chan interface{}
+	state         int
+	once          sync.Once
+	New           func() interface{}
 }
 
+var (
+	// Suppress go vet warnings.
+	_ = NewPool
+)
+
 // Init new pool with given size.
-func NewPool(size uint) *Pool {
-	p := Pool{Size: size}
+func NewPool(size uint, releaseFactor float32) *Pool {
+	p := Pool{
+		Size:          size,
+		ReleaseFactor: releaseFactor,
+	}
 	p.initPool()
 	return &p
 }
 
 // Prepare pool for work.
 func (p *Pool) initPool() {
+	// Check bounds of release factor first.
+	if p.ReleaseFactor < 0 {
+		p.ReleaseFactor = 0
+	}
+	if p.ReleaseFactor > 1.0 {
+		p.ReleaseFactor = 1.0
+	}
+
+	// Check size and init the storage.
 	if p.Size == 0 {
 		p.Size = poolDefSize
 	}
@@ -66,6 +86,19 @@ func (p *Pool) Get() interface{} {
 
 // Put adds x to the pool.
 func (p *Pool) Put(x Releaser) bool {
+	// Check release factor first
+	if p.ReleaseFactor > 0 {
+		rfc := atomic.AddUint32(&p.rfCounter, 1)
+		if rfc >= 100 {
+			atomic.StoreUint32(&p.rfCounter, 0)
+		} else if float32(rfc)/100 <= p.ReleaseFactor {
+			// ... and release x.
+			x.Release()
+			return false
+		}
+	}
+
+	// Implement leaky buffer logic.
 	select {
 	case p.ch <- x:
 		return true
