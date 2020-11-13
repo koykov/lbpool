@@ -1,8 +1,8 @@
 package lbpool
 
 import (
-	"math/rand"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -24,6 +24,7 @@ type Releaser interface {
 type Pool struct {
 	Size          uint
 	ReleaseFactor float32
+	rfCounter     uint32
 	ch            chan interface{}
 	state         int
 	once          sync.Once
@@ -36,8 +37,11 @@ var (
 )
 
 // Init new pool with given size.
-func NewPool(size uint) *Pool {
-	p := Pool{Size: size}
+func NewPool(size uint, releaseFactor float32) *Pool {
+	p := Pool{
+		Size:          size,
+		ReleaseFactor: releaseFactor,
+	}
 	p.initPool()
 	return &p
 }
@@ -84,7 +88,10 @@ func (p *Pool) Get() interface{} {
 func (p *Pool) Put(x Releaser) bool {
 	// Check release factor first
 	if p.ReleaseFactor > 0 {
-		if rand.Float32() <= p.ReleaseFactor {
+		rfc := atomic.AddUint32(&p.rfCounter, 1)
+		if rfc >= 100 {
+			atomic.StoreUint32(&p.rfCounter, 0)
+		} else if float32(rfc)/100 <= p.ReleaseFactor {
 			// ... and release x.
 			x.Release()
 			return false
