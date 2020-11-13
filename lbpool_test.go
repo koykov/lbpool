@@ -83,7 +83,7 @@ func TestPoolParallel(t *testing.T) {
 }
 
 func BenchmarkPool(b *testing.B) {
-	p := Pool{}
+	p := Pool{ReleaseFactor: 0.01}
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
@@ -102,7 +102,7 @@ func BenchmarkPool(b *testing.B) {
 func BenchmarkPoolParallel(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
-		p := Pool{}
+		p := Pool{ReleaseFactor: 0.01}
 		for pb.Next() {
 			var item *testPoolItem
 			x := p.Get()
