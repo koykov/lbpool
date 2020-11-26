@@ -9,8 +9,10 @@ const (
 	// Default size of the pool.
 	defaultPoolSize = 64
 
-	// Default release factor.
+	// Default release factor
 	defaultReleaseFactor float32 = 0
+	// and precision.
+	defaultReleaseFactorBase uint32 = 100
 
 	// Pool status code.
 	stateNil  = 0
@@ -35,6 +37,11 @@ type Pool struct {
 	// Usually RF <= 0.05 is enough.
 	ReleaseFactor float32
 	rfCounter     uint32
+	// RF base allows you to specify the precision of release factor. For example, combination of:
+	// * RF == 0.05
+	// * RF base == 100
+	// , means that 5% of items will be drop on the floor.
+	ReleaseFactorBase uint32
 	// Function to make new object if pool didn't deliver existing.
 	New func() interface{}
 	// Internal storage and status flag.
@@ -67,6 +74,9 @@ func (p *Pool) initPool() {
 	}
 	if p.ReleaseFactor > 1.0 {
 		p.ReleaseFactor = 1.0
+	}
+	if p.ReleaseFactorBase == 0 {
+		p.ReleaseFactorBase = defaultReleaseFactorBase
 	}
 
 	// Check size and init the storage.
@@ -103,12 +113,12 @@ func (p *Pool) Get() interface{} {
 // Put adds x to the pool.
 func (p *Pool) Put(x Releaser) bool {
 	// Check release factor first.
-	if p.ReleaseFactor > 0 {
+	if p.ReleaseFactor > 0 && p.ReleaseFactorBase > 0 {
 		rfc := atomic.AddUint32(&p.rfCounter, 1)
-		if rfc >= 100 {
+		if rfc >= p.ReleaseFactorBase {
 			// Release factor counter limit reached, reset it.
 			atomic.StoreUint32(&p.rfCounter, 0)
-		} else if float32(rfc)/100 <= p.ReleaseFactor {
+		} else if float32(rfc)/float32(p.ReleaseFactorBase) <= p.ReleaseFactor {
 			// Drop x on the floor.
 			x.Release()
 			return false
