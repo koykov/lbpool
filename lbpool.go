@@ -44,7 +44,7 @@ type Pool struct {
 	New func() interface{}
 	// Internal storage and status flag.
 	ch    chan interface{}
-	state int
+	state uint32
 	// Once helper that guarantee only one init of the pool.
 	once sync.Once
 }
@@ -87,14 +87,14 @@ func (p *Pool) initPool() {
 		p.Size = defaultPoolSize
 	}
 	p.ch = make(chan interface{}, p.Size)
-	p.state = stateInit
+	atomic.StoreUint32(&p.state, stateInit)
 }
 
 // Get selects an arbitrary item from the Pool, removes it from the
 // Pool, and returns it to the caller.
 func (p *Pool) Get() interface{} {
 	// Implement once logic if pool isn't inited yet.
-	if p.state == stateNil {
+	if atomic.LoadUint32(&p.state) == stateNil {
 		p.once.Do(func() { p.initPool() })
 	}
 
