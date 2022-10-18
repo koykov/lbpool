@@ -54,7 +54,7 @@ var (
 	_ = NewPool
 )
 
-// Init new pool with given size.
+// NewPool inits new pool with given size.
 func NewPool(size uint, releaseFactor float32) *Pool {
 	p := Pool{
 		Size:          size,
