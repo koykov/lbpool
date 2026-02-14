@@ -11,10 +11,6 @@ const (
 
 	// Default release factor.
 	defaultReleaseFactor float32 = 0
-
-	// Pool status code.
-	stateNil  = 0
-	stateInit = 1
 )
 
 // Releaser is the interface that wraps the basic Release method.
@@ -43,16 +39,10 @@ type Pool struct {
 	// Function to make new object if pool didn't deliver existing.
 	New func() interface{}
 	// Internal storage and status flag.
-	ch    chan interface{}
-	state uint32
+	ch chan interface{}
 	// Once helper that guarantee only one init of the pool.
 	once sync.Once
 }
-
-var (
-	// Suppress go vet warnings.
-	_ = NewPool
-)
 
 // NewPool inits new pool with given size.
 func NewPool(size uint, releaseFactor float32) *Pool {
@@ -60,44 +50,14 @@ func NewPool(size uint, releaseFactor float32) *Pool {
 		Size:          size,
 		ReleaseFactor: releaseFactor,
 	}
-	p.initPool()
+	p.once.Do(func() { p.init() })
 	return &p
-}
-
-// Prepare pool for work.
-func (p *Pool) initPool() {
-	// Check bounds of release factor first.
-	if p.ReleaseFactor < 0 {
-		p.ReleaseFactor = defaultReleaseFactor
-	}
-	if p.ReleaseFactor > 1.0 {
-		p.ReleaseFactor = 1.0
-	}
-	if p.rfBase == 0 {
-		p.rfBase = 1
-	}
-	if p.ReleaseFactor > defaultReleaseFactor && p.ReleaseFactor < 1 {
-		for float32(p.rfBase)*p.ReleaseFactor < 1 {
-			p.rfBase *= 10
-		}
-	}
-
-	// Check size and init the storage.
-	if p.Size == 0 {
-		p.Size = defaultPoolSize
-	}
-	p.ch = make(chan interface{}, p.Size)
-	atomic.StoreUint32(&p.state, stateInit)
 }
 
 // Get selects an arbitrary item from the Pool, removes it from the
 // Pool, and returns it to the caller.
 func (p *Pool) Get() interface{} {
-	// Implement once logic if pool isn't inited yet.
-	if atomic.LoadUint32(&p.state) == stateNil {
-		p.once.Do(func() { p.initPool() })
-	}
-
+	p.once.Do(func() { p.init() })
 	var x interface{}
 	select {
 	case x = <-p.ch:
@@ -115,6 +75,7 @@ func (p *Pool) Get() interface{} {
 
 // Put adds x to the pool.
 func (p *Pool) Put(x Releaser) bool {
+	p.once.Do(func() { p.init() })
 	// Check release factor first.
 	if p.ReleaseFactor > 0 && p.rfBase > 0 {
 		rfc := atomic.AddUint32(&p.rfCounter, 1)
@@ -137,4 +98,28 @@ func (p *Pool) Put(x Releaser) bool {
 		x.Release()
 	}
 	return false
+}
+
+func (p *Pool) init() {
+	// Check bounds of release factor first.
+	if p.ReleaseFactor < 0 {
+		p.ReleaseFactor = defaultReleaseFactor
+	}
+	if p.ReleaseFactor > 1.0 {
+		p.ReleaseFactor = 1.0
+	}
+	if p.rfBase == 0 {
+		p.rfBase = 1
+	}
+	if p.ReleaseFactor > defaultReleaseFactor && p.ReleaseFactor < 1 {
+		for float32(p.rfBase)*p.ReleaseFactor < 1 {
+			p.rfBase *= 10
+		}
+	}
+
+	// Check size and init the storage.
+	if p.Size == 0 {
+		p.Size = defaultPoolSize
+	}
+	p.ch = make(chan interface{}, p.Size)
 }
