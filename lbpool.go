@@ -16,7 +16,7 @@ const (
 // Object must implement release logic.
 type Pool interface {
 	// Get selects an arbitrary item from the pool, removes it from the pool, and returns it to the caller.
-	Get() interface{}
+	Get() any
 	// Put adds x to the pool.
 	Put(x Releaser) bool
 }
@@ -43,9 +43,9 @@ type pool struct {
 	// , means that 5% of items will be dropped on the floor.
 	rfBase uint32
 	// Function to make new object if pool didn't deliver existing.
-	newfn func() interface{}
+	newfn func() any
 	// Internal storage and status flag.
-	ch chan interface{}
+	ch chan any
 }
 
 // NewPool inits new pool with given size.
@@ -61,8 +61,8 @@ func NewPool(size uint, releaseFactor float32, options ...Option) Pool {
 	return p
 }
 
-func (p *pool) Get() interface{} {
-	var x interface{}
+func (p *pool) Get() any {
+	var x any
 	select {
 	case x = <-p.ch:
 		// Return existing object.
@@ -123,5 +123,5 @@ func (p *pool) init() {
 	if p.size == 0 {
 		p.size = defaultPoolSize
 	}
-	p.ch = make(chan interface{}, p.size)
+	p.ch = make(chan any, p.size)
 }
