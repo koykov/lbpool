@@ -19,21 +19,21 @@ func NewWriter(name string) Writer {
 }
 
 func (w *writer) Hit() {
-	vmchain.Counter("lbpool_hit").WithLabel("name", w.name).Inc()
-	vmchain.Gauge("lbpool_size", nil).WithLabel("name", w.name).Dec()
+	vmchain.Counter("lbpool_hit").WithLabel("pool", w.name).Inc()
+	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).Dec()
 }
 
 func (w *writer) New() {
-	vmchain.Counter("lbpool_new").WithLabel("name", w.name).Inc()
+	vmchain.Counter("lbpool_new").WithLabel("pool", w.name).Inc()
 }
 
 func (w *writer) Store() {
-	vmchain.Counter("lbpool_store").WithLabel("name", w.name).Inc()
-	vmchain.Gauge("lbpool_size", nil).WithLabel("name", w.name).Inc()
+	vmchain.Counter("lbpool_store").WithLabel("pool", w.name).Inc()
+	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).Inc()
 }
 
 func (w *writer) Leak(reason string) {
-	vmchain.Counter("lbpool_leak").WithLabel("name", w.name).WithLabel("reason", reason).Inc()
+	vmchain.Counter("lbpool_leak").WithLabel("pool", w.name).WithLabel("reason", reason).Inc()
 }
 
 var _ = NewWriter
