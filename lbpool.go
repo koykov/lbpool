@@ -46,6 +46,8 @@ type pool struct {
 	newfn func() any
 	// Internal storage and status flag.
 	ch chan any
+	// Metrics writer component.
+	mw MetricsWriter
 }
 
 // NewPool inits new pool with given size.
@@ -66,11 +68,13 @@ func (p *pool) Get() any {
 	select {
 	case x = <-p.ch:
 		// Return existing object.
+		p.mw.Hit()
 		return x
 	default:
 		// Use New() function to make new object.
 		if p.newfn != nil {
 			x = p.newfn()
+			p.mw.New()
 			return x
 		}
 	}
@@ -87,6 +91,7 @@ func (p *pool) Put(x Releaser) bool {
 		} else if float32(rfc)/float32(p.rfBase) <= p.releaseFactor {
 			// Drop x on the floor.
 			x.Release()
+			p.mw.Leak("factor")
 			return false
 		}
 	}
@@ -94,10 +99,12 @@ func (p *pool) Put(x Releaser) bool {
 	// Implement leaky buffer logic.
 	select {
 	case p.ch <- x:
+		p.mw.Store()
 		return true
 	default:
 		// Storage is full, release object manually and leak it.
 		x.Release()
+		p.mw.Leak("overflow")
 	}
 	return false
 }
@@ -124,4 +131,8 @@ func (p *pool) init() {
 		p.size = defaultPoolSize
 	}
 	p.ch = make(chan any, p.size)
+
+	if p.mw == nil {
+		p.mw = dummyMetricsWriter{}
+	}
 }

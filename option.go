@@ -7,3 +7,9 @@ func WithNewFn(fn func() any) Option {
 		p.newfn = fn
 	}
 }
+
+func WithMetricsWriter(mw MetricsWriter) Option {
+	return func(p *pool) {
+		p.mw = mw
+	}
+}
