@@ -157,7 +157,7 @@ func TestSampler(t *testing.T) {
 		}
 
 		const tolerance = 0.01
-		testfn := func(t *testing.T, tt testcase, s sampler, base uint64) {
+		testfn := func(t *testing.T, tt testcase, s *sampler, base uint64) {
 			totalRequests := tt.iterations * base
 			totalDrops := 0
 
@@ -177,15 +177,7 @@ func TestSampler(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				t.Run("bsampler", func(t *testing.T) {
-					testfn(t, tt, newSampler(base, tt.releaseFactor), base)
-				})
-				t.Run("sampler8", func(t *testing.T) {
-					testfn(t, tt, newSampler8(base, tt.releaseFactor), base)
-				})
-				t.Run("sampler64", func(t *testing.T) {
-					testfn(t, tt, newSampler64(base, tt.releaseFactor), base)
-				})
+				testfn(t, tt, newSampler(base, tt.releaseFactor), base)
 			})
 		}
 	})
@@ -194,7 +186,7 @@ func TestSampler(t *testing.T) {
 
 		for _, threshold := range thresholds {
 			t.Run(fmt.Sprintf("threshold_%d", threshold), func(t *testing.T) {
-				s := &bsampler{}
+				s := &sampler{}
 				var e int
 				for i := 0; i < base; i++ {
 					e += threshold
@@ -241,7 +233,7 @@ func TestSampler(t *testing.T) {
 		}
 	})
 	t.Run("deterministic", func(t *testing.T) {
-		testfn := func(t *testing.T, s1, s2 sampler, base uint64) {
+		testfn := func(t *testing.T, s1, s2 *sampler, base uint64) {
 			for i := uint64(0); i < base; i++ {
 				if s1.shouldDrop(i) != s2.shouldDrop(i) {
 					t.Errorf("samplers with same releaseFactor differ at index %d", i)
@@ -249,15 +241,7 @@ func TestSampler(t *testing.T) {
 				}
 			}
 		}
-		t.Run("bsampler", func(t *testing.T) {
-			testfn(t, newSampler(base, 0.33), newSampler(base, 0.33), base)
-		})
-		t.Run("sampler8", func(t *testing.T) {
-			testfn(t, newSampler8(base, 0.33), newSampler8(base, 0.33), base)
-		})
-		t.Run("sampler64", func(t *testing.T) {
-			testfn(t, newSampler64(base, 0.33), newSampler64(base, 0.33), base)
-		})
+		testfn(t, newSampler(base, 0.33), newSampler(base, 0.33), base)
 	})
 	t.Run("bias/no local", func(t *testing.T) {
 		type testcase struct {
@@ -284,7 +268,7 @@ func TestSampler(t *testing.T) {
 		}
 
 		const tolerance = 0.2
-		testfn := func(t *testing.T, tt testcase, s sampler, base uint64) {
+		testfn := func(t *testing.T, tt testcase, s *sampler, base uint64) {
 			for start := uint64(0); start < base-tt.windowSize; start += tt.windowSize {
 				windowDrops := 0
 				for i := start; i < start+tt.windowSize; i++ {
@@ -307,37 +291,20 @@ func TestSampler(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				t.Run("bsampler", func(t *testing.T) {
-					testfn(t, tt, newSampler(base, tt.releaseFactor), base)
-				})
-				t.Run("sampler8", func(t *testing.T) {
-					testfn(t, tt, newSampler8(base, tt.releaseFactor), base)
-				})
-				t.Run("sampler64", func(t *testing.T) {
-					testfn(t, tt, newSampler64(base, tt.releaseFactor), base)
-				})
+				testfn(t, tt, newSampler(base, tt.releaseFactor), base)
 			})
 		}
 	})
 }
 
 func BenchmarkSampler(b *testing.B) {
-	benchfn := func(b *testing.B, s sampler) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		var counter uint64
-		for i := 0; i < b.N; i++ {
-			_ = s.shouldDrop(counter)
-			counter++
-		}
+	s := newSampler(base, 0.33)
+	b.ReportAllocs()
+	b.ResetTimer()
+	var counter uint64
+	for i := 0; i < b.N; i++ {
+		_ = s.shouldDrop(counter)
+		counter++
 	}
-	b.Run("bsampler", func(b *testing.B) {
-		benchfn(b, newSampler(base, 0.33))
-	})
-	b.Run("sampler8", func(b *testing.B) {
-		benchfn(b, newSampler8(base, 0.33))
-	})
-	b.Run("sampler64", func(b *testing.B) {
-		benchfn(b, newSampler64(base, 0.33))
-	})
+
 }
