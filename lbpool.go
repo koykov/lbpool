@@ -42,7 +42,7 @@ type pool struct {
 	c uint64
 	// Sampler to equal should item be stored or not.
 	// Dependents of releaseFactor.
-	smpl *sampler
+	smpl *bsampler
 	// Metrics writer component.
 	mw MetricsWriter
 }
@@ -79,7 +79,7 @@ func (p *pool) Get() any {
 }
 
 func (p *pool) Put(x Releaser) bool {
-	// Check sampler first.
+	// Check bsampler first.
 	if p.smpl.shouldDrop(atomic.AddUint64(&p.c, 1)) {
 		// Drop x on the floor.
 		x.Release()
@@ -101,7 +101,7 @@ func (p *pool) Put(x Releaser) bool {
 }
 
 func (p *pool) init() {
-	p.smpl = newSampler(p.releaseFactor)
+	p.smpl = newSampler(base, p.releaseFactor)
 
 	// Check size and init the storage.
 	if p.size == 0 {

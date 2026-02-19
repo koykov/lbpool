@@ -10,19 +10,23 @@ const (
 	epsilon          = 1e-9
 )
 
-type sampler struct {
+type sampler interface {
+	shouldDrop(i uint64) bool
+}
+
+type bsampler struct {
 	base   uint64
 	lookup [base]bool
 }
 
-func newSampler(base uint64, releaseFactor float64) *sampler {
+func newSampler(base uint64, releaseFactor float64) *bsampler {
 	if releaseFactor < minReleaseFactor || math.IsNaN(releaseFactor) || math.IsInf(releaseFactor, 0) {
 		releaseFactor = 0 // all requests will pass
 	}
 	if releaseFactor > maxReleaseFactor {
 		releaseFactor = 1 // all requests will drop
 	}
-	s := &sampler{base: base}
+	s := &bsampler{base: base}
 	if releaseFactor == 0 {
 		return s
 	}
@@ -42,6 +46,6 @@ func newSampler(base uint64, releaseFactor float64) *sampler {
 	return s
 }
 
-func (s *sampler) shouldDrop(i uint64) bool {
-	return s.lookup[i%s.base]
+func (s *bsampler) shouldDrop(i uint64) bool {
+	return s.lookup[i%base]
 }

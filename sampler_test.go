@@ -8,11 +8,12 @@ import (
 
 func TestSampler(t *testing.T) {
 	t.Run("count drops", func(t *testing.T) {
-		tests := []struct {
+		type testcase struct {
 			name          string
 			releaseFactor float64
 			expectedDrops int
-		}{
+		}
+		tests := []testcase{
 			{
 				name:          "zero",
 				releaseFactor: 0,
@@ -82,7 +83,7 @@ func TestSampler(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				s := newSampler(tt.releaseFactor)
+				s := newSampler(base, tt.releaseFactor)
 
 				dropCount := 0
 				for i := 0; i < base; i++ {
@@ -117,11 +118,12 @@ func TestSampler(t *testing.T) {
 		}
 	})
 	t.Run("distribution/uniform", func(t *testing.T) {
-		tests := []struct {
+		type testcase struct {
 			name          string
 			releaseFactor float64
-			iterations    int
-		}{
+			iterations    uint64
+		}
+		tests := []testcase{
 			{
 				name:          "one percent uniform",
 				releaseFactor: 0.01,
@@ -154,28 +156,36 @@ func TestSampler(t *testing.T) {
 			},
 		}
 
-		tolerance := 0.01
+		const tolerance = 0.01
+		testfn := func(t *testing.T, tt testcase, s sampler, base uint64) {
+			totalRequests := tt.iterations * base
+			totalDrops := 0
 
+			for i := uint64(0); i < totalRequests; i++ {
+				if s.shouldDrop(i) {
+					totalDrops++
+				}
+			}
+
+			expectedDrops := int(float64(totalRequests) * tt.releaseFactor)
+
+			deviation := math.Abs(float64(totalDrops-expectedDrops)) / float64(expectedDrops)
+			if deviation > tolerance {
+				t.Errorf("distribution deviation too high: got %d drops, expected %d (deviation %.2f%%)",
+					totalDrops, expectedDrops, deviation*100)
+			}
+		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				s := newSampler(tt.releaseFactor)
-
-				totalRequests := tt.iterations * base
-				totalDrops := 0
-
-				for i := uint64(0); i < uint64(totalRequests); i++ {
-					if s.shouldDrop(i) {
-						totalDrops++
-					}
-				}
-
-				expectedDrops := int(float64(totalRequests) * tt.releaseFactor)
-
-				deviation := math.Abs(float64(totalDrops-expectedDrops)) / float64(expectedDrops)
-				if deviation > tolerance {
-					t.Errorf("distribution deviation too high: got %d drops, expected %d (deviation %.2f%%)",
-						totalDrops, expectedDrops, deviation*100)
-				}
+				t.Run("bsampler", func(t *testing.T) {
+					testfn(t, tt, newSampler(base, tt.releaseFactor), base)
+				})
+				t.Run("sampler8", func(t *testing.T) {
+					testfn(t, tt, newSampler8(base, tt.releaseFactor), base)
+				})
+				t.Run("sampler64", func(t *testing.T) {
+					testfn(t, tt, newSampler64(base, tt.releaseFactor), base)
+				})
 			})
 		}
 	})
@@ -184,7 +194,7 @@ func TestSampler(t *testing.T) {
 
 		for _, threshold := range thresholds {
 			t.Run(fmt.Sprintf("threshold_%d", threshold), func(t *testing.T) {
-				s := &sampler{}
+				s := &bsampler{}
 				var e int
 				for i := 0; i < base; i++ {
 					e += threshold
@@ -231,30 +241,31 @@ func TestSampler(t *testing.T) {
 		}
 	})
 	t.Run("deterministic", func(t *testing.T) {
-		s1 := newSampler(0.33)
-		s2 := newSampler(0.33)
-
-		for i := 0; i < base; i++ {
-			if s1.lookup[i] != s2.lookup[i] {
-				t.Errorf("samplers with same releaseFactor differ at index %d", i)
-				break
+		testfn := func(t *testing.T, s1, s2 sampler, base uint64) {
+			for i := uint64(0); i < base; i++ {
+				if s1.shouldDrop(i) != s2.shouldDrop(i) {
+					t.Errorf("samplers with same releaseFactor differ at index %d", i)
+					break
+				}
 			}
 		}
-
-		for i := uint64(0); i < 1000; i++ {
-			result1 := s1.shouldDrop(i)
-			result2 := s2.shouldDrop(i)
-			if result1 != result2 {
-				t.Errorf("inconsistent results for request %d", i)
-			}
-		}
+		t.Run("bsampler", func(t *testing.T) {
+			testfn(t, newSampler(base, 0.33), newSampler(base, 0.33), base)
+		})
+		t.Run("sampler8", func(t *testing.T) {
+			testfn(t, newSampler8(base, 0.33), newSampler8(base, 0.33), base)
+		})
+		t.Run("sampler64", func(t *testing.T) {
+			testfn(t, newSampler64(base, 0.33), newSampler64(base, 0.33), base)
+		})
 	})
 	t.Run("bias/no local", func(t *testing.T) {
-		tests := []struct {
+		type testcase struct {
 			name          string
 			releaseFactor float64
-			windowSize    int
-		}{
+			windowSize    uint64
+		}
+		tests := []testcase{
 			{
 				name:          "one third local",
 				releaseFactor: 1.0 / 3.0,
@@ -272,44 +283,61 @@ func TestSampler(t *testing.T) {
 			},
 		}
 
-		tolerance := 0.2
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				s := newSampler(tt.releaseFactor)
-
-				for start := 0; start < base-tt.windowSize; start += tt.windowSize {
-					windowDrops := 0
-					for i := start; i < start+tt.windowSize; i++ {
-						if s.lookup[i] {
-							windowDrops++
-						}
-					}
-
-					expectedWindowDrops := int(float64(tt.windowSize) * tt.releaseFactor)
-					if expectedWindowDrops == 0 {
-						expectedWindowDrops = 1
-					}
-
-					deviation := math.Abs(float64(windowDrops-expectedWindowDrops)) / float64(expectedWindowDrops)
-					if deviation > tolerance {
-						t.Errorf("local bias detected at window [%d, %d]: got %d drops, expected ~%d (deviation %.2f%%)",
-							start, start+tt.windowSize, windowDrops, expectedWindowDrops, deviation*100)
+		const tolerance = 0.2
+		testfn := func(t *testing.T, tt testcase, s sampler, base uint64) {
+			for start := uint64(0); start < base-tt.windowSize; start += tt.windowSize {
+				windowDrops := 0
+				for i := start; i < start+tt.windowSize; i++ {
+					if s.shouldDrop(i) {
+						windowDrops++
 					}
 				}
+
+				expectedWindowDrops := int(float64(tt.windowSize) * tt.releaseFactor)
+				if expectedWindowDrops == 0 {
+					expectedWindowDrops = 1
+				}
+
+				deviation := math.Abs(float64(windowDrops-expectedWindowDrops)) / float64(expectedWindowDrops)
+				if deviation > tolerance {
+					t.Errorf("local bias detected at window [%d, %d]: got %d drops, expected ~%d (deviation %.2f%%)",
+						start, start+tt.windowSize, windowDrops, expectedWindowDrops, deviation*100)
+				}
+			}
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Run("bsampler", func(t *testing.T) {
+					testfn(t, tt, newSampler(base, tt.releaseFactor), base)
+				})
+				t.Run("sampler8", func(t *testing.T) {
+					testfn(t, tt, newSampler8(base, tt.releaseFactor), base)
+				})
+				t.Run("sampler64", func(t *testing.T) {
+					testfn(t, tt, newSampler64(base, tt.releaseFactor), base)
+				})
 			})
 		}
 	})
 }
 
 func BenchmarkSampler(b *testing.B) {
-	s := newSampler(0.33)
-	var counter uint64
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = s.shouldDrop(counter)
-		counter++
+	benchfn := func(b *testing.B, s sampler) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		var counter uint64
+		for i := 0; i < b.N; i++ {
+			_ = s.shouldDrop(counter)
+			counter++
+		}
 	}
+	b.Run("bsampler", func(b *testing.B) {
+		benchfn(b, newSampler(base, 0.33))
+	})
+	b.Run("sampler8", func(b *testing.B) {
+		benchfn(b, newSampler8(base, 0.33))
+	})
+	b.Run("sampler64", func(b *testing.B) {
+		benchfn(b, newSampler64(base, 0.33))
+	})
 }

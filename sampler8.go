@@ -7,7 +7,7 @@ type sampler8 struct {
 	lookup [12500]uint8 // ceil(base / 8)
 }
 
-func newSampler8(base uint64, releaseFactor float64) *sampler8 {
+func newSampler8(base uint64, releaseFactor float64) sampler {
 	if releaseFactor < minReleaseFactor || math.IsNaN(releaseFactor) || math.IsInf(releaseFactor, 0) {
 		releaseFactor = 0 // all requests will pass
 	}
@@ -35,7 +35,7 @@ func newSampler8(base uint64, releaseFactor float64) *sampler8 {
 }
 
 func (s *sampler8) shouldDrop(i uint64) bool {
-	j := i % s.base
+	j := i % base
 	v := (s.lookup[j/8] & (1 << (j % 8))) >> (j % 8)
 	return v != 0
 }
