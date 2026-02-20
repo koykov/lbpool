@@ -8,6 +8,12 @@ func WithNewFn(fn func() any) Option {
 	}
 }
 
+func WithShards(shardsCount uint) Option {
+	return func(p *pool) {
+		p.shards = shardsCount
+	}
+}
+
 func WithMetricsWriter(mw MetricsWriter) Option {
 	return func(p *pool) {
 		p.mw = mw

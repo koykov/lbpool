@@ -36,8 +36,10 @@ type pool struct {
 	releaseFactor float64
 	// Function to make new object if pool didn't deliver existing.
 	newfn func() any
-	// Internal storage and status flag.
-	ch chan any
+	// Shards count.
+	shards uint
+	// Internal storage.
+	strg storage
 	// Counter of incoming items to store.
 	c uint64
 	// Sampler to equal should item be stored or not.
@@ -61,19 +63,15 @@ func NewPool(size uint, releaseFactor float64, options ...Option) Pool {
 }
 
 func (p *pool) Get() any {
-	var x any
-	select {
-	case x = <-p.ch:
+	x, s := p.strg.get()
+	if x != nil {
 		// Return existing object.
-		p.mw.Hit()
+		p.mw.Hit(s)
 		return x
-	default:
-		// Use New() function to make new object.
-		if p.newfn != nil {
-			x = p.newfn()
-			p.mw.New()
-			return x
-		}
+	} else if p.newfn != nil {
+		x = p.newfn()
+		p.mw.New(s)
+		return x
 	}
 	return nil
 }
@@ -83,21 +81,21 @@ func (p *pool) Put(x Releaser) bool {
 	if p.smpl.shouldDrop(atomic.AddUint64(&p.c, 1)) {
 		// Drop x on the floor.
 		x.Release()
-		p.mw.Leak("factor")
+		p.mw.Leak("-1", "factor")
 		return false
 	}
 
 	// Implement leaky buffer logic.
-	select {
-	case p.ch <- x:
-		p.mw.Store()
+	ok, s := p.strg.put(x)
+	if ok {
+		p.mw.Store(s)
 		return true
-	default:
+	} else {
 		// Storage is full, release object manually and leak it.
 		x.Release()
-		p.mw.Leak("overflow")
+		p.mw.Leak(s, "overflow")
+		return false
 	}
-	return false
 }
 
 func (p *pool) init() {
@@ -107,7 +105,11 @@ func (p *pool) init() {
 	if p.size == 0 {
 		p.size = defaultPoolSize
 	}
-	p.ch = make(chan any, p.size)
+	if p.shards > 0 {
+		p.strg = newSharded(p.size, p.shards)
+	} else {
+		p.strg = newSingle(p.size)
+	}
 	atomic.StoreUint64(&p.c, math.MaxUint64)
 
 	if p.mw == nil {
