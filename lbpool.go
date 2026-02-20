@@ -63,14 +63,14 @@ func NewPool(size uint, releaseFactor float64, options ...Option) Pool {
 }
 
 func (p *pool) Get() any {
-	x := p.strg.get()
+	x, s := p.strg.get()
 	if x != nil {
 		// Return existing object.
-		p.mw.Hit()
+		p.mw.Hit(s)
 		return x
 	} else if p.newfn != nil {
 		x = p.newfn()
-		p.mw.New()
+		p.mw.New(s)
 		return x
 	}
 	return nil
@@ -81,18 +81,19 @@ func (p *pool) Put(x Releaser) bool {
 	if p.smpl.shouldDrop(atomic.AddUint64(&p.c, 1)) {
 		// Drop x on the floor.
 		x.Release()
-		p.mw.Leak("factor")
+		p.mw.Leak("-1", "factor")
 		return false
 	}
 
 	// Implement leaky buffer logic.
-	if p.strg.put(x) {
-		p.mw.Store()
+	ok, s := p.strg.put(x)
+	if ok {
+		p.mw.Store(s)
 		return true
 	} else {
 		// Storage is full, release object manually and leak it.
 		x.Release()
-		p.mw.Leak("overflow")
+		p.mw.Leak(s, "overflow")
 		return false
 	}
 }

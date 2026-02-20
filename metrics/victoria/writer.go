@@ -3,10 +3,10 @@ package victoria
 import "github.com/koykov/vmchain"
 
 type Writer interface {
-	Hit()
-	New()
-	Store()
-	Leak(reason string)
+	Hit(shard string)
+	New(shard string)
+	Store(shard string)
+	Leak(shard, reason string)
 }
 
 type writer struct {
@@ -18,22 +18,22 @@ func NewWriter(name string) Writer {
 	return w
 }
 
-func (w *writer) Hit() {
-	vmchain.Counter("lbpool_hit").WithLabel("pool", w.name).Inc()
-	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).Dec()
+func (w *writer) Hit(shard string) {
+	vmchain.Counter("lbpool_hit").WithLabel("pool", w.name).WithLabel("shard", shard).Inc()
+	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).WithLabel("shard", shard).Dec()
 }
 
-func (w *writer) New() {
-	vmchain.Counter("lbpool_new").WithLabel("pool", w.name).Inc()
+func (w *writer) New(shard string) {
+	vmchain.Counter("lbpool_new").WithLabel("pool", w.name).WithLabel("shard", shard).Inc()
 }
 
-func (w *writer) Store() {
-	vmchain.Counter("lbpool_store").WithLabel("pool", w.name).Inc()
-	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).Inc()
+func (w *writer) Store(shard string) {
+	vmchain.Counter("lbpool_store").WithLabel("pool", w.name).WithLabel("shard", shard).Inc()
+	vmchain.Gauge("lbpool_size", nil).WithLabel("pool", w.name).WithLabel("shard", shard).Inc()
 }
 
-func (w *writer) Leak(reason string) {
-	vmchain.Counter("lbpool_leak").WithLabel("pool", w.name).WithLabel("reason", reason).Inc()
+func (w *writer) Leak(shard, reason string) {
+	vmchain.Counter("lbpool_leak").WithLabel("pool", w.name).WithLabel("shard", shard).WithLabel("reason", reason).Inc()
 }
 
 var _ = NewWriter
