@@ -40,7 +40,7 @@ func (i *testPoolItem) fill() {
 }
 
 func TestPool(t *testing.T) {
-	p := NewPool(defaultPoolSize, 0.000001)
+	p := New(defaultPoolSize, 0.000001)
 
 	for i := 0; i < 100; i++ {
 		var item *testPoolItem
@@ -56,7 +56,7 @@ func TestPool(t *testing.T) {
 }
 
 func TestPoolParallel(t *testing.T) {
-	p := NewPool(defaultPoolSize, 0.000001)
+	p := New(defaultPoolSize, 0.000001)
 
 	for i := 0; i < 100; i++ {
 		var wg sync.WaitGroup
@@ -83,7 +83,7 @@ func TestPoolParallel(t *testing.T) {
 }
 
 func BenchmarkPool(b *testing.B) {
-	p := NewPool(defaultPoolSize, 0.000001)
+	p := New(defaultPoolSize, 0.000001)
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
@@ -102,7 +102,7 @@ func BenchmarkPool(b *testing.B) {
 func BenchmarkPoolParallel(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
-		p := NewPool(defaultPoolSize, 0.000001)
+		p := New(defaultPoolSize, 0.000001)
 		for pb.Next() {
 			var item *testPoolItem
 			x := p.Get()
