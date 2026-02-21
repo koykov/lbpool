@@ -50,7 +50,13 @@ type pool struct {
 }
 
 // NewPool inits new pool with given size.
+// Deprecated: use New instead.
 func NewPool(size uint, releaseFactor float64, options ...Option) Pool {
+	return New(size, releaseFactor, options...)
+}
+
+// New inits new pool with given size.
+func New(size uint, releaseFactor float64, options ...Option) Pool {
 	p := &pool{
 		size:          size,
 		releaseFactor: releaseFactor,
