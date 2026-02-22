@@ -10,6 +10,7 @@ const (
 	epsilon          = 1e-9
 )
 
+// todo remove due to Sampler
 type sampler struct {
 	base   uint64
 	lookup [base]bool

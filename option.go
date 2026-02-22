@@ -14,6 +14,12 @@ func WithShards(shardsCount uint) Option {
 	}
 }
 
+func WithSampler(sampler Sampler) Option {
+	return func(p *pool) {
+		p.sampler = sampler
+	}
+}
+
 func WithMetricsWriter(mw MetricsWriter) Option {
 	return func(p *pool) {
 		p.mw = mw
