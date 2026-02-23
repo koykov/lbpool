@@ -20,6 +20,10 @@ type bresenham struct {
 }
 
 func NewBresenham(sampleRate float64) Sampler {
+	return newBresenham(sampleRate)
+}
+
+func newBresenham(sampleRate float64) *bresenham {
 	if sampleRate < minSampleRate || math.IsNaN(sampleRate) || math.IsInf(sampleRate, 0) {
 		sampleRate = 0 // all requests will drop
 	}
@@ -46,5 +50,5 @@ func NewBresenham(sampleRate float64) Sampler {
 }
 
 func (s *bresenham) Sample() bool {
-	return !s.lookup[atomic.AddUint64(&s.c, 1)%base]
+	return s.lookup[atomic.AddUint64(&s.c, 1)%base]
 }
