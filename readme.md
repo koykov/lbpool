@@ -45,6 +45,7 @@ with arguments:
 Currently, three optional functions are available:
 * `WithNewFn` - Sets the New function for constructing an object to return instead of a `nil` value.
 * `WithShards` - The number of pool shards, needed to reduce lock contention on the internal channel's mutex.
+* `WithSampler` - Sets the sampler ti evaluate should item stored to the pool or not. May be helpful to refresh pool.
 * `WithMetricsWriter` - Connects a component for writing metrics to the pool.
 
 ## Usage
