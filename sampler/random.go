@@ -5,11 +5,18 @@ type RNG interface {
 	Float64() float64
 }
 
-type Random struct {
+type random struct {
 	rate float64
 	rng  RNG
 }
 
-func (s *Random) Sample() bool {
+func NewRandom(rate float64, rng RNG) Sampler {
+	return &random{
+		rate: rate,
+		rng:  rng,
+	}
+}
+
+func (s *random) Sample() bool {
 	return s.rng.Float64() < s.rate
 }
